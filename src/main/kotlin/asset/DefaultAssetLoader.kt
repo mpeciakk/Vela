@@ -96,5 +96,10 @@ class DefaultAssetLoader(assetManager: AssetManager) : AssetLoader(assetManager)
         queueAsset("texture", Texture::class.java)
         queueAsset("model", ObjModel::class.java)
         queueAsset("default", String::class.java)
+        queueAsset("depth", String::class.java)
+        queueAsset("light_accumulation", String::class.java)
+        queueAsset("hdr", String::class.java)
+        queueAsset("light_culling", String::class.java)
+        queueAsset("depth_debug", String::class.java)
     }
 }
