@@ -10,8 +10,8 @@ class DefaultMeshFactory : MeshFactory() {
         mesh.bind()
 
         val vertices = mesh.getVbo(0, 3)
-        val uvs = mesh.getVbo(1, 2)
-        val normals = mesh.getVbo(2, 3)
+        val normals = mesh.getVbo(1, 3)
+        val uvs = mesh.getVbo(2, 2)
         val indices = mesh.addVbo(IndicesVBO())
 
         val meshVertices = meshBuilder.vertices

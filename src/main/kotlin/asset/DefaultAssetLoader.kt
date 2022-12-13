@@ -1,6 +1,5 @@
 package asset
 
-import model.ObjModel
 import ain.mesh.Vertex
 import aries.AssetLoader
 import aries.AssetManager
@@ -8,8 +7,19 @@ import de.javagl.obj.FloatTuples
 import de.javagl.obj.ObjData
 import de.javagl.obj.ObjReader
 import de.javagl.obj.ObjUtils
+import model.ObjModel
 import org.lwjgl.BufferUtils
+import org.lwjgl.assimp.*
+import org.lwjgl.assimp.Assimp.aiImportFile
+import org.lwjgl.assimp.Assimp.aiImportFileEx
 import org.lwjgl.opengl.GL11.*
+import org.lwjgl.system.MemoryUtil.*
+import java.io.File
+import java.io.FileInputStream
+import java.io.FileNotFoundException
+import java.io.IOException
+import java.nio.ByteBuffer
+import java.nio.channels.FileChannel
 import javax.imageio.ImageIO
 
 
@@ -95,11 +105,55 @@ class DefaultAssetLoader(assetManager: AssetManager) : AssetLoader(assetManager)
     override fun load() {
         queueAsset("texture", Texture::class.java)
         queueAsset("model", ObjModel::class.java)
+        queueAsset("sponza", ObjModel::class.java)
+        queueAsset("magnet", ObjModel::class.java)
         queueAsset("default", String::class.java)
         queueAsset("depth", String::class.java)
         queueAsset("light_accumulation", String::class.java)
         queueAsset("hdr", String::class.java)
         queueAsset("light_culling", String::class.java)
         queueAsset("depth_debug", String::class.java)
+        queueAsset("light_debug", String::class.java)
+    }
+
+    @Throws(IOException::class)
+    fun ioResourceToByteBuffer(resource: String, bufferSize: Int): ByteBuffer {
+        var buffer: ByteBuffer
+        val url = Thread.currentThread().contextClassLoader.getResource(resource)
+            ?: throw IOException("Classpath resource not found: $resource")
+        val file = File(url.file)
+        if (file.isFile()) {
+            val fis = FileInputStream(file)
+            val fc: FileChannel = fis.getChannel()
+            buffer = fc.map(FileChannel.MapMode.READ_ONLY, 0, fc.size())
+            fc.close()
+            fis.close()
+        } else {
+            buffer = BufferUtils.createByteBuffer(bufferSize)
+            val source = url.openStream() ?: throw FileNotFoundException(resource)
+            try {
+                val buf = ByteArray(8192)
+                while (true) {
+                    val bytes = source.read(buf, 0, buf.size)
+                    if (bytes == -1) break
+                    if (buffer.remaining() < bytes) buffer = resizeBuffer(
+                        buffer,
+                        Math.max(buffer.capacity() * 2, buffer.capacity() - buffer.remaining() + bytes)
+                    )
+                    buffer.put(buf, 0, bytes)
+                }
+                buffer.flip()
+            } finally {
+                source.close()
+            }
+        }
+        return buffer
+    }
+
+    private fun resizeBuffer(buffer: ByteBuffer, newCapacity: Int): ByteBuffer {
+        val newBuffer = BufferUtils.createByteBuffer(newCapacity)
+        buffer.flip()
+        newBuffer.put(buffer)
+        return newBuffer
     }
 }

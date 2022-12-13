@@ -13,6 +13,7 @@ repositories {
 
     maven("https://repo.peciak.xyz/snapshots")
     maven("https://oss.sonatype.org/content/repositories/snapshots")
+    maven("https://jitpack.io")
 }
 
 val lwjglVersion = "3.3.1"
@@ -37,6 +38,9 @@ dependencies {
     implementation(platform("org.jetbrains.kotlin:kotlin-bom"))
     implementation("org.jetbrains.kotlin:kotlin-stdlib-jdk8")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.6.4")
+
+    implementation("org.lwjgl:lwjgl-assimp:3.3.1")
+    runtimeOnly("org.lwjgl", "lwjgl-assimp", classifier = lwjglNatives)
 
     implementation("de.javagl:obj:0.3.0")
 }

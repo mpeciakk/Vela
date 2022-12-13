@@ -1,17 +1,15 @@
 #section VERTEX_SHADER
 
-layout (location = 0) in vec3 position;
-layout (location = 1) in vec3 normal;
-layout (location = 2) in vec2 texCoords;
-layout (location = 3) in vec3 tangent;
-layout (location = 4) in vec3 bitangent;
+layout (location = 0) in vec3 vert_pos;
+layout (location = 1) in vec3 vert_normal;
+layout (location = 2) in vec2 vert_uv;
+layout (location = 3) in vec3 vert_tangent;
 
 out VERTEX_OUT {
-    vec3 fragmentPosition;
-    vec2 textureCoordinates;
+    vec2 frag_uv;
     mat3 TBN;
-    vec3 tangentViewPosition;
-    vec3 tangentFragmentPosition;
+    vec3 ts_frag_pos;
+    vec3 ts_view_pos;
 } vertex_out;
 
 // Uniforms
@@ -21,124 +19,114 @@ uniform mat4 model;
 uniform vec3 viewPosition;
 
 void main() {
-    gl_Position = projection * view * model * vec4(position, 1.0);
-    vertex_out.fragmentPosition = vec3(model * vec4(position, 1.0));
-    vertex_out.textureCoordinates = texCoords;
+    gl_Position = projection * view * model * vec4(vert_pos, 1.0);
+    vec3 frag_pos = vec3(model * vec4(vert_pos, 1.0));
 
-    mat3 normalMatrix = transpose(inverse(mat3(model)));
-    vec3 tan = normalize(normalMatrix * tangent);
-    vec3 bitan = normalize(normalMatrix * bitangent);
-    vec3 norm = normalize(normalMatrix * normal);
+    mat3 normal_matrix = transpose(inverse(mat3(model)));
+    vec3 N = normalize(vec3(normal_matrix * vert_normal));
+    vec3 T = normalize(vec3(normal_matrix * vert_tangent));
+    T = normalize(T - dot(T, N) * N);
+    vec3 B = cross(N, T);
 
-    // For tangent space normal mapping
-    mat3 TBN = transpose(mat3(tan, bitan, norm));
-    vertex_out.tangentViewPosition = TBN * viewPosition;
-    vertex_out.tangentFragmentPosition = TBN * vertex_out.fragmentPosition;
-    vertex_out.TBN = TBN;
+    vertex_out.frag_uv = vert_uv;
+    vertex_out.TBN = transpose(mat3(T, B, N));
+    vertex_out.ts_view_pos  = vertex_out.TBN * viewPosition;
+    vertex_out.ts_frag_pos = vertex_out.TBN * frag_pos;
 }
 
 #section FRAGMENT_SHADER
 
+#define MAX_LIGHTS_PER_TILE 128
+
 in VERTEX_OUT{
-    vec3 fragmentPosition;
-    vec2 textureCoordinates;
+    vec2 frag_uv;
     mat3 TBN;
-    vec3 tangentViewPosition;
-    vec3 tangentFragmentPosition;
+    vec3 ts_frag_pos;
+    vec3 ts_view_pos;
 } fragment_in;
 
 struct PointLight {
-    vec4 color;
     vec4 position;
+    vec4 color;
     vec4 paddingAndRadius;
 };
 
-struct VisibleIndex {
-    int index;
-};
-
 // Shader storage buffer objects
-layout(std430, binding = 0) readonly buffer LightBuffer {
+layout(std430, binding = 0) buffer LightBuffer {
     PointLight data[];
 } lightBuffer;
 
-layout(std430, binding = 1) readonly buffer VisibleLightIndicesBuffer {
-    VisibleIndex data[];
-} visibleLightIndicesBuffer;
+layout(std430, binding = 1) buffer visible_lights_indices {
+    int lights_indices[];
+};
 
 // Uniforms
 uniform sampler2D texture_diffuse1;
-uniform sampler2D texture_specular1;
 uniform sampler2D texture_normal1;
+
+uniform int doLightDebug;
 uniform int numberOfTilesX;
 
 out vec4 fragColor;
-
-// Attenuate the point light intensity
-float attenuate(vec3 lightDirection, float radius) {
-    float cutoff = 0.5;
-    float attenuation = dot(lightDirection, lightDirection) / (100.0 * radius);
-    attenuation = 1.0 / (attenuation * 15.0 + 1.0);
-    attenuation = (attenuation - cutoff) / (1.0 - cutoff);
-
-    return clamp(attenuation, 0.0, 1.0);
-}
 
 void main() {
     // Determine which tile this pixel belongs to
     ivec2 location = ivec2(gl_FragCoord.xy);
     ivec2 tileID = location / ivec2(16, 16);
     uint index = tileID.y * numberOfTilesX + tileID.x;
+    uint offset = index * MAX_LIGHTS_PER_TILE;
 
-    // Get color and normal components from texture maps
-    vec4 base_diffuse = texture(texture_diffuse1, fragment_in.textureCoordinates);
-    vec4 base_specular = texture(texture_specular1, fragment_in.textureCoordinates);
-    vec3 normal = texture(texture_normal1, fragment_in.textureCoordinates).rgb;
+    vec4 result = vec4(0.0, 0.0, 0.0, 1.0);
+
+    vec4 base_diffuse = texture(texture_diffuse1, fragment_in.frag_uv);
+
+    vec3 normal = texture(texture_normal1, fragment_in.frag_uv).rgb;
     normal = normalize(normal * 2.0 - 1.0);
-    vec4 color = vec4(0.0, 0.0, 0.0, 1.0);
 
-    vec3 viewDirection = normalize(fragment_in.tangentViewPosition - fragment_in.tangentFragmentPosition);
+    float specpower = 60.0f;
 
-    // The offset is this tile's position in the global array of valid light indices.
-    // Loop through all these indices until we hit max number of lights or the end (indicated by an index of -1)
-    // Calculate the lighting contribution from each visible point light
-    uint offset = index * 1024;
-    for (uint i = 0; i < 1024 && visibleLightIndicesBuffer.data[offset + i].index != -1; i++) {
-        uint lightIndex = visibleLightIndicesBuffer.data[offset + i].index;
-        PointLight light = lightBuffer.data[lightIndex];
+    for (uint i = 0; i < MAX_LIGHTS_PER_TILE; i++)
+    {
+        if (lights_indices[offset + i] != -1)
+        {
+            int indices = lights_indices[offset + i];
 
-        vec4 lightColor = light.color;
-        vec3 tangentLightPosition = fragment_in.TBN * light.position.xyz;
-        float lightRadius = light.paddingAndRadius.w;
+            PointLight light = lightBuffer.data[indices];
 
-        // Calculate the light attenuation on the pre-normalized lightDirection
-        vec3 lightDirection = tangentLightPosition - fragment_in.tangentFragmentPosition;
-        float attenuation = attenuate(lightDirection, lightRadius);
+            vec3 ts_light_pos = fragment_in.TBN * vec3(light.position);
+            vec3 ts_light_dir = normalize(ts_light_pos - fragment_in.ts_frag_pos);
+            float dist = length(ts_light_pos - fragment_in.ts_frag_pos);
 
-        // Normalize the light direction and calculate the halfway vector
-        lightDirection = normalize(lightDirection);
-        vec3 halfway = normalize(lightDirection + viewDirection);
+            vec3 N = normal;
+            vec3 L = ts_light_dir;
 
-        // Calculate the diffuse and specular components of the irradiance, then irradiance, and accumulate onto color
-        float diffuse = max(dot(lightDirection, normal), 0.0);
-        // How do I change the material propery for the spec exponent? is it the alpha of the spec texture?
-        float specular = pow(max(dot(normal, halfway), 0.0), 32.0);
+            vec3 R = reflect(-L, N);
+            float NdotR = max(0.0, dot(N, R));
+            float NdotL = max(0.0, dot(N, L));
 
-        // Hacky fix to handle issue where specular light still effects scene once point light has passed into an object
-        if (diffuse == 0.0) {
-            specular = 0.0;
+            float attenuation = clamp(1.0 - dist * dist / (light.paddingAndRadius.w * light.paddingAndRadius.w), 0.0, 1.0);
+
+            vec3 diffuse_color  = 1.0 * vec3(light.color.x, light.color.y, light.color.z) * vec3(base_diffuse.r, base_diffuse.g, base_diffuse.b) * NdotL * attenuation;
+            vec3 specular_color = vec3(1.0) * pow(NdotR, specpower) * attenuation;
+
+            result += vec4(diffuse_color + specular_color, 0.0);
         }
-
-        vec3 irradiance = lightColor.rgb * ((base_diffuse.rgb * diffuse) + (base_specular.rgb * vec3(specular))) * attenuation;
-        color.rgb += irradiance;
     }
 
-    color.rgb += base_diffuse.rgb * 0.08;
-
-    // Use the mask to discard any fragments that are transparent
     if (base_diffuse.a <= 0.2) {
         discard;
     }
 
-    fragColor = color;
+    fragColor = vec4(1, 1, 1, 1);
+
+    if (doLightDebug==1){
+        uint count;
+        for (uint i = 0; i < MAX_LIGHTS_PER_TILE; i++) {
+            if (lights_indices[offset + i] != -1 ) {
+                count++;
+            }
+        }
+        float shade = float(count) / float(MAX_LIGHTS_PER_TILE * 2);
+        fragColor = vec4(shade, shade, shade, 1.0);
+    }
 }
