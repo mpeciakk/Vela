@@ -7,8 +7,9 @@ import input.InputManager
 import light.PointLight
 import model.ObjModel
 import org.joml.Vector3f
+import org.lwjgl.glfw.GLFW.*
 import org.lwjgl.opengl.GL30.*
-import render.DefaultRenderPipeline
+import render.ForwardRenderingPipeline
 import render.DeferredRenderingPipeline
 import scene.Scene
 import scene.SceneManager
@@ -23,32 +24,38 @@ class GameObject(private val model: ObjModel) : Renderable() {
 
 class PointLightObj : Renderable() {
     override fun rebuild() {
-        getBuilder().drawCube(0f, 0f, 0f, 1f, 1f, 1f, true, true, true, true, true, true)
+        getBuilder().drawCube(3f, 0f, 0f, 1f, 1f, 1f, true, true, true, true, true, true)
     }
 }
 
-class TestScene(private val app: App) : Scene() {
-    private val deferredRenderer = MeshRenderer<GameObject>(DeferredRenderingPipeline(app.assetManager, app.window))
-    private val forwardRenderer = MeshRenderer<PointLightObj>(DefaultRenderPipeline(app.assetManager))
-    private val obj = GameObject(app.assetManager[ObjModel::class.java, "model"])
+class TestScene2(private val app: App) : Scene() {
+    private val forwardRenderingPipeline = ForwardRenderingPipeline(app.assetManager)
+    private val forwardRenderer = MeshRenderer<PointLightObj>(forwardRenderingPipeline)
+
     private val light = PointLightObj()
 
     override fun create() {
-        obj.markDirty()
         light.markDirty()
     }
 
     override fun render(deltaTime: Float) {
-        deferredRenderer.render(obj)
-
-//        glBindFramebuffer(GL_READ_FRAMEBUFFER, deferredRenderer);
-//        glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0); // write to default framebuffer
-//        glBlitFramebuffer(
-//            0, 0, SCR_WIDTH, SCR_HEIGHT, 0, 0, SCR_WIDTH, SCR_HEIGHT, GL_DEPTH_BUFFER_BIT, GL_NEAREST
-//        );
-//        glBindFramebuffer(GL_FRAMEBUFFER, 0);
-
+        glClear(GL_COLOR_BUFFER_BIT or GL_DEPTH_BUFFER_BIT)
         forwardRenderer.render(light)
+    }
+}
+
+class TestScene(private val app: App) : Scene() {
+    private val deferredRenderingPipeline = DeferredRenderingPipeline(app.assetManager, app.window)
+    private val deferredRenderer = MeshRenderer<GameObject>(deferredRenderingPipeline)
+
+    private val obj = GameObject(app.assetManager[ObjModel::class.java, "model"])
+
+    override fun create() {
+        obj.markDirty()
+    }
+
+    override fun render(deltaTime: Float) {
+        deferredRenderer.render(obj)
     }
 }
 
@@ -63,6 +70,7 @@ class App : VelaApplication() {
     private val sceneManager = SceneManager()
 
     private lateinit var scene: Scene
+    private lateinit var scene2: Scene
 
     override fun create() {
         window.create()
@@ -81,6 +89,7 @@ class App : VelaApplication() {
         camera.makeCurrent()
 
         scene = TestScene(this)
+        scene2 = TestScene2(this)
 
         sceneManager.changeScene(scene)
 
@@ -95,13 +104,24 @@ class App : VelaApplication() {
         sceneManager.render(deltaTime)
 
         window.swapBuffers()
+
+        if (input.isKeyPressed(GLFW_KEY_Q)) {
+            sceneManager.changeScene(scene2)
+        }
+
+        if (input.isKeyPressed(GLFW_KEY_E)) {
+            sceneManager.changeScene(scene)
+        }
+
+        if (input.isKeyPressed(GLFW_KEY_ESCAPE)) {
+            close()
+        }
     }
 
     override fun destroy() {
         window.destroy()
     }
 }
-
 
 fun main(args: Array<String>) {
     launch(App())

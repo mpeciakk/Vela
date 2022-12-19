@@ -1,20 +1,12 @@
 package render
 
-import QuadMesh
 import ain.Window
 import ain.mesh.Mesh
 import ain.rp.RenderPipeline
 import ain.rp.Renderable
-import ain.shader.Shader
 import aries.AssetManager
 import buffer.GBuffer
-import light.PointLight
-import org.joml.Vector3f
-import org.lwjgl.opengl.GL11
-import org.lwjgl.opengl.GL11.*
-import org.lwjgl.opengl.GL20
 import org.lwjgl.opengl.GL30.*
-import scene.Scene
 import scene.SceneManager
 import shader.DefaultShader
 import java.nio.ByteBuffer
@@ -22,16 +14,42 @@ import java.nio.ByteBuffer
 class DeferredRenderingPipeline(assetManager: AssetManager, private val window: Window) :
     RenderPipeline(DefaultShader(assetManager[String::class.java, "empty"]), DefaultMeshFactory()) {
 
+    val gBuffer = GBuffer(window)
+
     private val gBufferShader = DefaultShader(assetManager[String::class.java, "gbuffer"])
     private val finalShader = DefaultShader(assetManager[String::class.java, "final"])
     private val depthShader = DefaultShader(assetManager[String::class.java, "depth"])
-
-    private val gBuffer = GBuffer(window)
 
     private val quad = QuadMesh()
 
     private val fbo = glGenFramebuffers()
     private val depthMap = glGenTextures()
+
+    init {
+        glBindTexture(GL_TEXTURE_2D, depthMap)
+        glTexImage2D(
+            GL_TEXTURE_2D,
+            0,
+            GL_DEPTH_COMPONENT,
+            window.width,
+            window.height,
+            0,
+            GL_DEPTH_COMPONENT,
+            GL_FLOAT,
+            null as ByteBuffer?
+        )
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST)
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST)
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT)
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT)
+
+        glBindFramebuffer(GL_FRAMEBUFFER, fbo)
+        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, depthMap, 0)
+        glDrawBuffer(GL_NONE)
+        glReadBuffer(GL_NONE)
+
+        glBindFramebuffer(GL_FRAMEBUFFER, 0)
+    }
 
     private fun render(mesh: Mesh) {
         mesh.bind()
@@ -45,22 +63,6 @@ class DeferredRenderingPipeline(assetManager: AssetManager, private val window: 
             glDisableVertexAttribArray(it.attributeNumber)
         }
         mesh.unbind()
-    }
-
-    init {
-        glBindTexture(GL_TEXTURE_2D, depthMap)
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT, window.width, window.height, 0, GL_DEPTH_COMPONENT, GL_FLOAT, null as ByteBuffer?)
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST)
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST)
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT)
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT)
-
-        glBindFramebuffer(GL_FRAMEBUFFER, fbo)
-        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, depthMap, 0)
-        glDrawBuffer(GL_NONE)
-        glReadBuffer(GL_NONE)
-
-        glBindFramebuffer(GL_FRAMEBUFFER, 0)
     }
 
     override fun render(obj: Renderable, mesh: Mesh) {
