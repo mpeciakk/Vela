@@ -32,7 +32,7 @@ val lwjglNatives = Pair(
 }
 
 dependencies {
-    implementation("mpeciakk:Ain:1.0.3-SNAPSHOT")
+    implementation("mpeciakk:Ain:1.0.5-SNAPSHOT")
     implementation("mpeciakk:Aries:1.0.1-SNAPSHOT")
 
     implementation(platform("org.jetbrains.kotlin:kotlin-bom"))

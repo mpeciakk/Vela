@@ -3,109 +3,106 @@ import ain.rp.MeshRenderer
 import ain.rp.Renderable
 import aries.AssetManager
 import asset.DefaultAssetLoader
-import asset.Texture
 import input.InputManager
-import light.DirectionalLight
+import light.PointLight
 import model.ObjModel
 import org.joml.Vector3f
-import org.lwjgl.opengl.GL11.*
-import org.lwjgl.opengl.GL13.GL_TEXTURE0
-import org.lwjgl.opengl.GL13.glActiveTexture
+import org.lwjgl.opengl.GL30.*
 import render.DefaultRenderPipeline
-import kotlin.math.abs
-import kotlin.math.cos
-import kotlin.math.sin
+import render.DeferredRenderingPipeline
+import scene.Scene
+import scene.SceneManager
 
 
 class GameObject(private val model: ObjModel) : Renderable() {
     override fun rebuild() {
-//        getBuilder().drawCube(0f, 0f, -5f, 1f, 1f, 1f, true, true, true, true, true, true)
-
         getBuilder().setIndices(model.indices.asList())
         getBuilder().setVertices(model.vertices)
     }
 }
 
-fun main(args: Array<String>) {
+class PointLightObj : Renderable() {
+    override fun rebuild() {
+        getBuilder().drawCube(0f, 0f, 0f, 1f, 1f, 1f, true, true, true, true, true, true)
+    }
+}
+
+class TestScene(private val app: App) : Scene() {
+    private val deferredRenderer = MeshRenderer<GameObject>(DeferredRenderingPipeline(app.assetManager, app.window))
+    private val forwardRenderer = MeshRenderer<PointLightObj>(DefaultRenderPipeline(app.assetManager))
+    private val obj = GameObject(app.assetManager[ObjModel::class.java, "model"])
+    private val light = PointLightObj()
+
+    override fun create() {
+        obj.markDirty()
+        light.markDirty()
+    }
+
+    override fun render(deltaTime: Float) {
+        deferredRenderer.render(obj)
+
+//        glBindFramebuffer(GL_READ_FRAMEBUFFER, deferredRenderer);
+//        glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0); // write to default framebuffer
+//        glBlitFramebuffer(
+//            0, 0, SCR_WIDTH, SCR_HEIGHT, 0, 0, SCR_WIDTH, SCR_HEIGHT, GL_DEPTH_BUFFER_BIT, GL_NEAREST
+//        );
+//        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+        forwardRenderer.render(light)
+    }
+}
+
+class App : VelaApplication() {
     val window = Window(800, 600, "Ain engine")
-    window.create()
-
-    glEnable(GL_DEPTH_TEST)
-
     val assetManager = AssetManager()
-    val assetLoader = DefaultAssetLoader(assetManager)
-
-    assetLoader.load()
-    assetLoader.loadAssets()
-
-    val texture = assetManager[Texture::class.java, "texture"]
-
+    private val assetLoader = DefaultAssetLoader(assetManager)
     val input = InputManager()
-    input.start(window)
 
     val camera = Camera(window.width, window.height, input)
-    camera.makeCurrent()
 
-    var lightAngle = -90f
-    val lightIntensity = 0.0f
-    val dlPosition = Vector3f(0f, 0f, 0f)
+    private val sceneManager = SceneManager()
 
-    val directionalLight = DirectionalLight(dlPosition, Vector3f(1f, 1f, 1f), lightIntensity)
+    private lateinit var scene: Scene
 
-    val renderer = MeshRenderer<GameObject>(DefaultRenderPipeline(assetManager, directionalLight))
+    override fun create() {
+        window.create()
 
-    var lastFrameTime = -1L
-    var deltaTime = 0.0f
-    var frameCounterStart = 0L
-    var fps = 0
-    var frames = 0
+        glEnable(GL_MULTISAMPLE)
+        glEnable(GL_DEPTH_TEST)
 
-    val obj = GameObject(assetManager[ObjModel::class.java, "model"])
-    obj.markDirty()
+        glEnable(GL_BLEND)
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
 
-    while (!window.shouldClose) {
-        window.update()
+        assetLoader.load()
+        assetLoader.loadAssets()
 
-        val time = System.nanoTime()
-        if (lastFrameTime == -1L) lastFrameTime = time
+        input.start(window)
 
-        deltaTime = (time - lastFrameTime) / 1000000000.0f
+        camera.makeCurrent()
 
-        lastFrameTime = time
+        scene = TestScene(this)
 
-        if (time - frameCounterStart >= 1000000000) {
-            fps = frames
-            frames = 0
-            frameCounterStart = time
-        }
-        frames++
+        sceneManager.changeScene(scene)
 
-//        light.position.z += cos(frames.toDouble()).toFloat()
+        scene.pointLights.add(0, PointLight(Vector3f(1f, 1f, 1f), Vector3f(0f, 0f, 3f), 1f, 0f, 1f, 0f))
+    }
 
-        glClear(GL_COLOR_BUFFER_BIT or GL_DEPTH_BUFFER_BIT)
-        glClearColor(0f, 0f, 1f, 1f)
+    override fun render(deltaTime: Float) {
+        window.pollEvents()
         input.update()
         Camera.current.update()
 
-        glActiveTexture(GL_TEXTURE0)
-        glBindTexture(GL_TEXTURE_2D, texture.id)
+        sceneManager.render(deltaTime)
 
-        lightAngle += 0.5f
-        if (lightAngle > 90) {
-            directionalLight.intensity = 0f
-
-            if (lightAngle >= 360) {
-                lightAngle = -90f
-            }
-        } else if (lightAngle <= -80 || lightAngle >= 80) {
-            val factor = 1 - (abs(lightAngle) - 80) / 10f
-            directionalLight.intensity = factor
-        }
-
-        val ang = Math.toRadians(lightAngle.toDouble())
-        directionalLight.direction.x = sin(ang).toFloat()
-        directionalLight.direction.y = cos(ang).toFloat()
-
-        renderer.render(obj)
+        window.swapBuffers()
     }
+
+    override fun destroy() {
+        window.destroy()
+    }
+}
+
+
+fun main(args: Array<String>) {
+    launch(App())
 }
