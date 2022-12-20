@@ -31,7 +31,16 @@ struct PointLight {
     float exponent;
 };
 
+struct DirectionalLight
+{
+    vec3 color;
+    float ambientIntensity;
+    float diffuseIntensity;
+    vec3 direction;
+};
+
 uniform PointLight light;
+uniform DirectionalLight directionalLight;
 
 vec4 calcLightColor(vec4 diffuse, vec4 specular, float reflectance, vec3 lightColor, float light_intensity, vec3 position, vec3 to_light_dir, vec3 normal) {
     vec4 diffuseColor = vec4(0, 0, 0, 1);
@@ -77,16 +86,23 @@ void main()
     vec3 albedo  = albedoSamplerValue.rgb;
     vec4 diffuse = vec4(albedo, 1);
 
-    vec3 normal = normalize(texture(normalTexture, outTextCoord).rgb);
+    vec3 normal = texture(normalTexture, outTextCoord).rgb;
 
     float reflectance = 1;
     vec4 specular = vec4(1);
 
-    vec4 diffuseSpecularComp = vec4(0);
+    vec4 ambientColor = vec4(directionalLight.color * directionalLight.ambientIntensity, 1.0f);
+    float diffuseFactor = dot(normalize(normal), -directionalLight.direction);
 
-//    PointLight light = PointLight(vec3(0, 10, 0), vec3(1, 1, 1), 1, 1, 0, 0);
+    vec4 diffuseColor;
 
-    diffuseSpecularComp += calcPointLight(diffuse, specular, reflectance, light, position, normal);
+    if (diffuseFactor > 0) {
+        diffuseColor = vec4(directionalLight.color * directionalLight.diffuseIntensity * diffuseFactor, 1.0f);
+    } else {
+        diffuseColor = vec4(0, 0, 0, 0);
+    }
 
-    FragColor = vec4(0.1, 0.1, 0.1, 1) + diffuseSpecularComp;
+    vec4 diffuseSpecularComp = calcPointLight(diffuse, specular, reflectance, light, position, normal);
+
+    FragColor = ambientColor + diffuseColor;
 }

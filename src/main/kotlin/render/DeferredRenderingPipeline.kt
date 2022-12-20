@@ -1,5 +1,6 @@
 package render
 
+import Camera
 import ain.Window
 import ain.mesh.Mesh
 import ain.rp.RenderPipeline
@@ -90,9 +91,16 @@ class DeferredRenderingPipeline(assetManager: AssetManager, private val window: 
         gBufferShader.loadMatrix("projectionMatrix", Camera.current.projectionMatrix)
         gBufferShader.loadMatrix("transformationMatrix", obj.transformationMatrix)
 
+        glDepthMask(true)
+        glClear(GL_COLOR_BUFFER_BIT or GL_DEPTH_BUFFER_BIT)
+        glEnable(GL_DEPTH_TEST)
+        glDisable(GL_BLEND)
+
         render(mesh)
 
         glEnable(GL_BLEND)
+        glDepthMask(false)
+        glDisable(GL_DEPTH_TEST)
         gBufferShader.stop()
         glBindFramebuffer(GL_FRAMEBUFFER, 0)
 
@@ -104,6 +112,7 @@ class DeferredRenderingPipeline(assetManager: AssetManager, private val window: 
         glBlendEquation(GL_FUNC_ADD)
         glBlendFunc(GL_ONE, GL_ONE)
         glBindFramebuffer(GL_READ_FRAMEBUFFER, gBuffer.id)
+        glClear(GL_COLOR_BUFFER_BIT)
 
         val textureIds = gBuffer.textures
         val numTextures = textureIds.size
@@ -128,6 +137,14 @@ class DeferredRenderingPipeline(assetManager: AssetManager, private val window: 
         finalShader.loadFloat("light.constant", light.constant)
         finalShader.loadFloat("light.linear", light.linear)
         finalShader.loadFloat("light.exponent", light.exponent)
+
+        val directionalLight = SceneManager.scene.directionalLight
+        if (directionalLight != null) {
+            finalShader.loadVector("directionalLight.color", directionalLight.color)
+            finalShader.loadVector("directionalLight.direction", directionalLight.direction)
+            finalShader.loadFloat("directionalLight.ambientIntensity", directionalLight.ambientIntensity)
+            finalShader.loadFloat("directionalLight.diffuseIntensity", directionalLight.diffuseIntensity)
+        }
 
         glBindVertexArray(quad.vaoId)
         glDrawElements(GL_TRIANGLES, quad.numVertices, GL_UNSIGNED_INT, 0)

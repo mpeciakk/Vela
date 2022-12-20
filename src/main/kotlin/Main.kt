@@ -4,8 +4,11 @@ import ain.rp.Renderable
 import aries.AssetManager
 import asset.DefaultAssetLoader
 import input.InputManager
+import light.DirectionalLight
 import light.PointLight
 import model.ObjModel
+import org.joml.Math.cos
+import org.joml.Matrix4f
 import org.joml.Vector3f
 import org.lwjgl.glfw.GLFW.*
 import org.lwjgl.opengl.GL30.*
@@ -24,38 +27,39 @@ class GameObject(private val model: ObjModel) : Renderable() {
 
 class PointLightObj : Renderable() {
     override fun rebuild() {
-        getBuilder().drawCube(3f, 0f, 0f, 1f, 1f, 1f, true, true, true, true, true, true)
-    }
-}
-
-class TestScene2(private val app: App) : Scene() {
-    private val forwardRenderingPipeline = ForwardRenderingPipeline(app.assetManager)
-    private val forwardRenderer = MeshRenderer<PointLightObj>(forwardRenderingPipeline)
-
-    private val light = PointLightObj()
-
-    override fun create() {
-        light.markDirty()
-    }
-
-    override fun render(deltaTime: Float) {
-        glClear(GL_COLOR_BUFFER_BIT or GL_DEPTH_BUFFER_BIT)
-        forwardRenderer.render(light)
+        getBuilder().drawCube(0f, 0f, 0f, 0.1f, 0.1f, 0.1f, true, true, true, true, true, true)
     }
 }
 
 class TestScene(private val app: App) : Scene() {
     private val deferredRenderingPipeline = DeferredRenderingPipeline(app.assetManager, app.window)
     private val deferredRenderer = MeshRenderer<GameObject>(deferredRenderingPipeline)
+    private val forwardRenderingPipeline = ForwardRenderingPipeline(app.assetManager)
+    private val forwardRenderer = MeshRenderer<PointLightObj>(forwardRenderingPipeline)
 
     private val obj = GameObject(app.assetManager[ObjModel::class.java, "model"])
+    private val light = PointLightObj()
+
+    private var i = 0f
 
     override fun create() {
         obj.markDirty()
+        light.markDirty()
+        directionalLight = DirectionalLight(Vector3f(1f, 1f, 1f), 0.01f, Vector3f(0f, 1f, 0f), 0.75f)
+
+        pointLights.add(0, PointLight(Vector3f(1f, 1f, 1f), Vector3f(0f, 0f, 0f), 1f, 0f, 1f, 0f))
     }
 
     override fun render(deltaTime: Float) {
+        i += 0.01f;
+        pointLights[0].position.x += cos(i) / 50f
+        light.transformationMatrix.setTranslation(pointLights[0].position)
+
         deferredRenderer.render(obj)
+        deferredRenderingPipeline.gBuffer.blit()
+
+//        glClear(GL_COLOR_BUFFER_BIT or GL_DEPTH_BUFFER_BIT)
+        forwardRenderer.render(light)
     }
 }
 
@@ -70,7 +74,6 @@ class App : VelaApplication() {
     private val sceneManager = SceneManager()
 
     private lateinit var scene: Scene
-    private lateinit var scene2: Scene
 
     override fun create() {
         window.create()
@@ -89,7 +92,6 @@ class App : VelaApplication() {
         camera.makeCurrent()
 
         scene = TestScene(this)
-        scene2 = TestScene2(this)
 
         sceneManager.changeScene(scene)
 
@@ -104,14 +106,6 @@ class App : VelaApplication() {
         sceneManager.render(deltaTime)
 
         window.swapBuffers()
-
-        if (input.isKeyPressed(GLFW_KEY_Q)) {
-            sceneManager.changeScene(scene2)
-        }
-
-        if (input.isKeyPressed(GLFW_KEY_E)) {
-            sceneManager.changeScene(scene)
-        }
 
         if (input.isKeyPressed(GLFW_KEY_ESCAPE)) {
             close()
