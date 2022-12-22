@@ -32,7 +32,7 @@ val lwjglNatives = Pair(
 }
 
 dependencies {
-    implementation("mpeciakk:Ain:1.0.5-SNAPSHOT")
+    implementation("mpeciakk:Ain:1.0.8-SNAPSHOT")
     implementation("mpeciakk:Aries:1.0.1-SNAPSHOT")
 
     implementation(platform("org.jetbrains.kotlin:kotlin-bom"))
@@ -41,6 +41,9 @@ dependencies {
 
     implementation("org.lwjgl:lwjgl-assimp:3.3.1")
     runtimeOnly("org.lwjgl", "lwjgl-assimp", classifier = lwjglNatives)
+
+    implementation("io.github.spair:imgui-java-binding:1.86.5")
+    runtimeOnly("io.github.spair:imgui-java-$lwjglNatives:1.86.5")
 
     implementation("de.javagl:obj:0.3.0")
 }

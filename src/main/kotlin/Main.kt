@@ -3,6 +3,9 @@ import ain.rp.MeshRenderer
 import ain.rp.Renderable
 import aries.AssetManager
 import asset.DefaultAssetLoader
+import asset.Texture
+import imgui.ImGui
+import imgui.flag.ImGuiCond
 import input.InputManager
 import light.DirectionalLight
 import light.PointLight
@@ -16,6 +19,10 @@ import render.ForwardRenderingPipeline
 import render.DeferredRenderingPipeline
 import scene.Scene
 import scene.SceneManager
+import org.lwjgl.opengl.GL11.*
+import render.DefaultRenderPipeline
+import render.gui.GuiInstance
+import render.gui.GuiRenderPipeline
 
 
 class GameObject(private val model: ObjModel) : Renderable() {
@@ -24,6 +31,7 @@ class GameObject(private val model: ObjModel) : Renderable() {
         getBuilder().setVertices(model.vertices)
     }
 }
+
 
 class PointLightObj : Renderable() {
     override fun rebuild() {
@@ -58,12 +66,46 @@ class TestScene(private val app: App) : Scene() {
         deferredRenderer.render(obj)
         deferredRenderingPipeline.gBuffer.blit()
 
-//        glClear(GL_COLOR_BUFFER_BIT or GL_DEPTH_BUFFER_BIT)
         forwardRenderer.render(light)
     }
 }
 
+class TestGui : GuiInstance() {
+
+    private val array = FloatArray(1)
+
+    override fun render() {
+        ImGui.newFrame()
+        ImGui.setNextWindowPos(0f, 0f, ImGuiCond.Always)
+
+        ImGui.text("Hello, world!")
+
+        if (ImGui.beginPopupModal("popup")) {
+            ImGui.text("test123")
+            ImGui.separator()
+            ImGui.text("321tset")
+
+            if (ImGui.button("x")) {
+                ImGui.closeCurrentPopup()
+            }
+
+            ImGui.endPopup()
+        }
+
+
+        if (ImGui.button("Przycisk?")) {
+            ImGui.openPopup("popup")
+        }
+
+        ImGui.sliderFloat("label", array, -21f, 37f)
+
+        ImGui.endFrame()
+        ImGui.render()
+    }
+}
+
 class App : VelaApplication() {
+
     val window = Window(800, 600, "Ain engine")
     val assetManager = AssetManager()
     private val assetLoader = DefaultAssetLoader(assetManager)
@@ -74,6 +116,10 @@ class App : VelaApplication() {
     private val sceneManager = SceneManager()
 
     private lateinit var scene: Scene
+
+    private lateinit var gui: GuiInstance
+    private lateinit var guiRenderer: MeshRenderer<GuiInstance>
+
 
     override fun create() {
         window.create()
@@ -95,6 +141,11 @@ class App : VelaApplication() {
 
         sceneManager.changeScene(scene)
 
+        guiRenderer = MeshRenderer(GuiRenderPipeline(assetManager, window))
+
+        gui = TestGui()
+        gui.markDirty()
+
         scene.pointLights.add(0, PointLight(Vector3f(1f, 1f, 1f), Vector3f(0f, 0f, 3f), 1f, 0f, 1f, 0f))
     }
 
@@ -105,11 +156,14 @@ class App : VelaApplication() {
 
         sceneManager.render(deltaTime)
 
-        window.swapBuffers()
-
         if (input.isKeyPressed(GLFW_KEY_ESCAPE)) {
             close()
         }
+
+        gui.update(window, input)
+        guiRenderer.render(gui)
+
+        window.swapBuffers()
     }
 
     override fun destroy() {

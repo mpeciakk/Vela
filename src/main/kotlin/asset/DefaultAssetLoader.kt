@@ -18,10 +18,6 @@ class DefaultAssetLoader(assetManager: AssetManager) : AssetLoader(assetManager)
     init {
         deserializers[Texture::class.java] = object : Deserializer<Texture>() {
             override fun deserialize(name: String): Texture {
-                val textureId = glGenTextures()
-                glBindTexture(GL_TEXTURE_2D, textureId)
-                glPixelStorei(GL_UNPACK_ALIGNMENT, 1)
-
                 val image = ImageIO.read(getFileStream("/textures/$name.png"))
 
                 val width = image.width
@@ -50,14 +46,7 @@ class DefaultAssetLoader(assetManager: AssetManager) : AssetLoader(assetManager)
 
                 pixels.flip()
 
-                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST)
-                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST)
-
-                glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
-
-                glBindTexture(GL_TEXTURE_2D, 0);
-
-                return Texture(textureId)
+                return Texture(width, height, pixels)
             }
         }
 
@@ -99,5 +88,6 @@ class DefaultAssetLoader(assetManager: AssetManager) : AssetLoader(assetManager)
         queueAsset("gbuffer", String::class.java)
         queueAsset("depth", String::class.java)
         queueAsset("final", String::class.java)
+        queueAsset("gui", String::class.java)
     }
 }

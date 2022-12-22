@@ -17,8 +17,9 @@ class GBuffer(window: Window) : Destroyable {
     init {
         id = glGenFramebuffers()
         glBindFramebuffer(GL_DRAW_FRAMEBUFFER, id)
+
         textures = IntArray(TOTAL_TEXTURES)
-        GL11.glGenTextures(textures)
+        glGenTextures(textures)
         width = window.width
         height = window.height
         for (i in 0 until TOTAL_TEXTURES) {

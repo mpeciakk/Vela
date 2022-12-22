@@ -54,13 +54,13 @@ class DeferredRenderingPipeline(assetManager: AssetManager, private val window: 
 
     private fun render(mesh: Mesh) {
         mesh.bind()
-        mesh.vbos.forEach {
+        mesh.vbos.values.forEach {
             glEnableVertexAttribArray(it.attributeNumber)
         }
 
         glDrawElements(GL_TRIANGLES, mesh.elementsCount, GL_UNSIGNED_INT, 0)
 
-        mesh.vbos.forEach {
+        mesh.vbos.values.forEach {
             glDisableVertexAttribArray(it.attributeNumber)
         }
         mesh.unbind()
@@ -149,6 +149,9 @@ class DeferredRenderingPipeline(assetManager: AssetManager, private val window: 
         glBindVertexArray(quad.vaoId)
         glDrawElements(GL_TRIANGLES, quad.numVertices, GL_UNSIGNED_INT, 0)
         glBindVertexArray(0)
+
+        glBindTexture(GL_TEXTURE_2D, 0)
+
         finalShader.stop()
     }
 }
