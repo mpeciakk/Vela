@@ -4,17 +4,16 @@ import ain.rp.Renderable
 import aries.AssetManager
 import asset.DefaultAssetLoader
 import asset.Texture
+import imgui.ImGui
+import imgui.flag.ImGuiCond
 import input.InputManager
 import light.DirectionalLight
 import model.ObjModel
 import org.joml.Vector3f
 import org.lwjgl.opengl.GL11.*
-import org.lwjgl.opengl.GL13.GL_TEXTURE0
-import org.lwjgl.opengl.GL13.glActiveTexture
 import render.DefaultRenderPipeline
-import kotlin.math.abs
-import kotlin.math.cos
-import kotlin.math.sin
+import render.gui.GuiInstance
+import render.gui.GuiRenderPipeline
 
 
 class GameObject(private val model: ObjModel) : Renderable() {
@@ -23,6 +22,40 @@ class GameObject(private val model: ObjModel) : Renderable() {
 
         getBuilder().setIndices(model.indices.asList())
         getBuilder().setVertices(model.vertices)
+    }
+}
+
+class TestGui : GuiInstance() {
+
+    private val array = FloatArray(1)
+
+    override fun render() {
+        ImGui.newFrame()
+        ImGui.setNextWindowPos(0f, 0f, ImGuiCond.Always)
+
+        ImGui.text("Hello, world!")
+
+        if (ImGui.beginPopupModal("popup")) {
+            ImGui.text("test123")
+            ImGui.separator()
+            ImGui.text("321tset")
+
+            if (ImGui.button("x")) {
+                ImGui.closeCurrentPopup()
+            }
+
+            ImGui.endPopup()
+        }
+
+
+        if (ImGui.button("Przycisk?")) {
+            ImGui.openPopup("popup")
+        }
+
+        ImGui.sliderFloat("label", array, -21f, 37f)
+
+        ImGui.endFrame()
+        ImGui.render()
     }
 }
 
@@ -53,6 +86,7 @@ fun main(args: Array<String>) {
     val directionalLight = DirectionalLight(dlPosition, Vector3f(1f, 1f, 1f), lightIntensity)
 
     val renderer = MeshRenderer<GameObject>(DefaultRenderPipeline(assetManager, directionalLight))
+    val guiRenderer = MeshRenderer<GuiInstance>(GuiRenderPipeline(assetManager, window))
 
     var lastFrameTime = -1L
     var deltaTime = 0.0f
@@ -63,8 +97,11 @@ fun main(args: Array<String>) {
     val obj = GameObject(assetManager[ObjModel::class.java, "model"])
     obj.markDirty()
 
+    val gui = TestGui()
+    gui.markDirty()
+
     while (!window.shouldClose) {
-        window.update()
+        window.pollEvents()
 
         val time = System.nanoTime()
         if (lastFrameTime == -1L) lastFrameTime = time
@@ -87,25 +124,12 @@ fun main(args: Array<String>) {
         input.update()
         Camera.current.update()
 
-        glActiveTexture(GL_TEXTURE0)
-        glBindTexture(GL_TEXTURE_2D, texture.id)
-
-        lightAngle += 0.5f
-        if (lightAngle > 90) {
-            directionalLight.intensity = 0f
-
-            if (lightAngle >= 360) {
-                lightAngle = -90f
-            }
-        } else if (lightAngle <= -80 || lightAngle >= 80) {
-            val factor = 1 - (abs(lightAngle) - 80) / 10f
-            directionalLight.intensity = factor
-        }
-
-        val ang = Math.toRadians(lightAngle.toDouble())
-        directionalLight.direction.x = sin(ang).toFloat()
-        directionalLight.direction.y = cos(ang).toFloat()
-
         renderer.render(obj)
+
+        gui.update(window, input)
+
+        guiRenderer.render(gui)
+
+        window.swapBuffers()
     }
 }

@@ -53,13 +53,13 @@ class DefaultRenderPipeline(assetManager: AssetManager, private val light: Direc
         shader.loadViewMatrix(Camera.current.viewMatrix)
 
         mesh.bind()
-        mesh.vbos.forEach {
+        mesh.vbos.values.forEach {
             GL20.glEnableVertexAttribArray(it.attributeNumber)
         }
 
         GL11.glDrawElements(GL11.GL_TRIANGLES, mesh.elementsCount, GL11.GL_UNSIGNED_INT, 0);
 
-        mesh.vbos.forEach {
+        mesh.vbos.values.forEach {
             GL20.glDisableVertexAttribArray(it.attributeNumber)
         }
         mesh.unbind()
